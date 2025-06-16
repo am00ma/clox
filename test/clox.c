@@ -1,9 +1,11 @@
 #include <string.h>         // strlen
 #include <stz/arena.h>      // Arena
 #include <stz/macros.h>     // dbg, die
+#include <stz/range.h>      // RANGE
 #include <stz/utils/file.h> // file_read
 
 #include "error.h"
+#include "token.h"
 
 Error run_file(Str path)
 {
@@ -14,6 +16,14 @@ Error run_file(Str path)
 
     Str text = textOk.data;
     dbg("%.*s", pstr(text));
+
+    Tokens tokens = tokens_scan(text, &perm);
+
+    RANGE(i, tokens.len)
+    {
+        Arena temp = perm;
+        printf("%d: %.*s\n", i, pstr(token_string(&tokens.data[i], &temp)));
+    }
 
     return 0;
 }

@@ -4,12 +4,6 @@
 #include <stz/macros.h>
 #include <stz/str.h>
 
-Str token_string(Token* t, Arena* perm)
-{
-    constexpr isize maxlen = 1024;
-    return str_fmtn(perm, maxlen, "(%2d, %.*s, %.*s, %d)", t->type, pstr(t->lexeme), pstr(t->literal), t->line);
-}
-
 typedef struct
 {
     isize start;
@@ -29,6 +23,12 @@ Str scanner_string(Scanner* s, Arena* perm)
                     "line   : %ld\n"
                     "len    : %ld\n",
                     s->start, s->current, s->line, s->text.len);
+}
+
+Str token_string(Token* t, Arena* perm)
+{
+    constexpr isize maxlen = 1024;
+    return str_fmtn(perm, maxlen, "(%2d, %.*s, %.*s, %d)", t->type, pstr(t->lexeme), pstr(t->literal), t->line);
 }
 
 // Constructor
@@ -71,6 +71,26 @@ void tokens_append_literal(Tokens* tokens, Scanner* s, TokenType type, Str liter
     tokens->len++;
 }
 
+char now(Scanner* s) { return s->text.buf[s->current]; }
+
+char advance(Scanner* s) { return s->text.buf[s->current++]; }
+
+bool is_at_end(Scanner* s) { return s->current >= s->text.len; }
+
+bool match(Scanner* s, char expected)
+{
+    if (is_at_end(s)) return false;
+    if (now(s) != expected) return false;
+    s->current++;
+    return true;
+}
+
+char peek(Scanner* s)
+{
+    if (is_at_end(s)) return '\0';
+    return now(s);
+}
+
 // Core function
 Tokens tokens_scan(Str text, Arena* perm)
 {
@@ -87,24 +107,39 @@ Tokens tokens_scan(Str text, Arena* perm)
     isize  maxtokens = 1024;
     Tokens tokens    = tokens_new(maxtokens, perm);
 
-    while (s.current < s.text.len)
+    while (!is_at_end(&s))
     {
         s.start = s.current;
         // scan_token
         // - Advance TODO: Buffer pointer sanity
-        char c = s.text.buf[s.current++];
+        char c = advance(&s);
         switch (c)
         {
-        case '(': tokens_append_literal(&tokens, &s, LEFT_PAREN, Str("("), perm); break;
-        case ')': tokens_append_literal(&tokens, &s, RIGHT_PAREN, Str(")"), perm); break;
-        case '{': tokens_append_literal(&tokens, &s, LEFT_BRACE, Str("{"), perm); break;
-        case '}': tokens_append_literal(&tokens, &s, RIGHT_BRACE, Str("}"), perm); break;
-        case ',': tokens_append_literal(&tokens, &s, COMMA, Str(","), perm); break;
-        case '.': tokens_append_literal(&tokens, &s, DOT, Str("."), perm); break;
-        case '-': tokens_append_literal(&tokens, &s, MINUS, Str("-"), perm); break;
-        case '+': tokens_append_literal(&tokens, &s, PLUS, Str("+"), perm); break;
-        case ';': tokens_append_literal(&tokens, &s, SEMICOLON, Str(";"), perm); break;
-        case '*': tokens_append_literal(&tokens, &s, STAR, Str("*"), perm); break;
+        case '(': tokens_append(&tokens, &s, LEFT_PAREN, perm); break;
+        case ')': tokens_append(&tokens, &s, RIGHT_PAREN, perm); break;
+        case '{': tokens_append(&tokens, &s, LEFT_BRACE, perm); break;
+        case '}': tokens_append(&tokens, &s, RIGHT_BRACE, perm); break;
+        case ',': tokens_append(&tokens, &s, COMMA, perm); break;
+        case '.': tokens_append(&tokens, &s, DOT, perm); break;
+        case '-': tokens_append(&tokens, &s, MINUS, perm); break;
+        case '+': tokens_append(&tokens, &s, PLUS, perm); break;
+        case ';': tokens_append(&tokens, &s, SEMICOLON, perm); break;
+        case '*': tokens_append(&tokens, &s, STAR, perm); break;
+
+        case '!': tokens_append(&tokens, &s, match(&s, '=') ? BANG_EQUAL : BANG, perm); break;
+        case '=': tokens_append(&tokens, &s, match(&s, '=') ? EQUAL_EQUAL : EQUAL, perm); break;
+        case '<': tokens_append(&tokens, &s, match(&s, '=') ? LESS_EQUAL : LESS, perm); break;
+        case '>': tokens_append(&tokens, &s, match(&s, '=') ? GREATER_EQUAL : GREATER, perm); break;
+
+        case '/':
+            if (match(&s, '/'))
+            {
+                // A comment goes until the end of the line.
+                while ((peek(&s) != '\n') && !is_at_end(&s)) advance(&s);
+            } else {
+                tokens_append(&tokens, &s, SLASH, perm);
+            }
+            break;
 
         case '\n': s.line++; break;
 

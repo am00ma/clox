@@ -91,6 +91,14 @@ static inline char peek(Scanner* s)
     if (is_at_end(s)) return '\0';
     return now(s);
 }
+static inline char peek_next(Scanner* s)
+{
+    if (s->current + 1 >= s->text.len) return '\0';
+    return s->text.buf[s->current + 1];
+}
+static inline bool is_numeric(char c) { return ((c >= '0') && (c <= '9')); }
+static inline bool is_alpha(char c) { return (((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z')) || (c == '_')); }
+static inline bool is_alphanumeric(char c) { return (is_alpha(c) || is_numeric(c)); }
 
 Token case_comment_or_slash(Scanner* s, int comment, int slash, Arena* perm)
 {
@@ -132,6 +140,38 @@ Token case_string(Scanner* s, Arena* perm)
     t.type    = STRING;
     t.line    = s->line;
     t.literal = (Str){.buf = &s->text.buf[s->start + 1], .len = s->current - s->start - 1};
+    return t;
+}
+
+Token case_number(Scanner* s, Arena* perm)
+{
+    Token t = {};
+
+    while (is_numeric(peek(s))) advance(s);
+
+    // Look for a fractional part.
+    if (peek(s) == '.' && is_numeric(peek_next(s)))
+    {
+        // Consume the "."
+        advance(s);
+
+        while (is_numeric(peek(s))) advance(s);
+    }
+
+    t.type    = NUMBER;
+    t.line    = s->line;
+    t.literal = (Str){.buf = &s->text.buf[s->start], .len = s->current - s->start};
+    return t;
+}
+
+Token case_identifier(Scanner* s, Arena* perm)
+{
+    Token t = {};
+    while (is_alphanumeric(peek(s))) advance(s);
+
+    t.type    = IDENTIFIER;
+    t.line    = s->line;
+    t.literal = (Str){.buf = &s->text.buf[s->start], .len = s->current - s->start};
     return t;
 }
 
@@ -193,7 +233,22 @@ Tokens tokens_scan(Str text, Arena* perm)
         case '\t':
             // Ignore whitespace.
             break;
-        default: error("Unexpected character: %c", c); break;
+
+        default:
+            if (is_numeric(c))
+            {
+                t = case_number(&s, perm);
+                tokens_append_token(&tokens, t, perm);
+
+            } else if (is_alpha(c)) {
+
+                t = case_identifier(&s, perm);
+                tokens_append_token(&tokens, t, perm);
+
+            } else {
+                error("Unexpected character: %c", c);
+            }
+            break;
         }
     }
 

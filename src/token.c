@@ -1,8 +1,6 @@
 #include "token.h"
 #include <stdio.h>
-#include <stz/arena.h>
 #include <stz/macros.h>
-#include <stz/str.h>
 
 typedef struct
 {
@@ -71,24 +69,45 @@ void tokens_append_literal(Tokens* tokens, Scanner* s, TokenType type, Str liter
     tokens->len++;
 }
 
-char now(Scanner* s) { return s->text.buf[s->current]; }
+void tokens_append_token(Tokens* tokens, Token t, Arena* perm)
+{
+    if (tokens->len >= tokens->cap) { die(1, "Out of memory"); }
+    tokens->data[tokens->len] = t;
+    tokens->len++;
+}
 
-char advance(Scanner* s) { return s->text.buf[s->current++]; }
-
-bool is_at_end(Scanner* s) { return s->current >= s->text.len; }
-
-bool match(Scanner* s, char expected)
+static inline char now(Scanner* s) { return s->text.buf[s->current]; }
+static inline char advance(Scanner* s) { return s->text.buf[s->current++]; }
+static inline bool is_at_end(Scanner* s) { return s->current >= s->text.len; }
+static inline bool match(Scanner* s, char expected)
 {
     if (is_at_end(s)) return false;
     if (now(s) != expected) return false;
     s->current++;
     return true;
 }
-
-char peek(Scanner* s)
+static inline char peek(Scanner* s)
 {
     if (is_at_end(s)) return '\0';
     return now(s);
+}
+
+Token case_comment_or_slash(Scanner* s, int comment, int slash, Arena* perm)
+{
+    Token t = {};
+
+    if (match(s, '/'))
+    {
+        // A comment goes until the end of the line.
+        while ((peek(s) != '\n') && (!is_at_end(s))) { advance(s); };
+        t.type    = comment;
+        t.line    = s->line;
+        t.literal = (Str){.buf = &s->text.buf[s->start], .len = s->current - s->start};
+    } else {
+        t.type = slash;
+        t.line = s->line;
+    }
+    return t;
 }
 
 // Core function
@@ -110,7 +129,7 @@ Tokens tokens_scan(Str text, Arena* perm)
     while (!is_at_end(&s))
     {
         s.start = s.current;
-        // scan_token
+
         // - Advance TODO: Buffer pointer sanity
         char c = advance(&s);
         switch (c)
@@ -132,13 +151,8 @@ Tokens tokens_scan(Str text, Arena* perm)
         case '>': tokens_append(&tokens, &s, match(&s, '=') ? GREATER_EQUAL : GREATER, perm); break;
 
         case '/':
-            if (match(&s, '/'))
-            {
-                // A comment goes until the end of the line.
-                while ((peek(&s) != '\n') && !is_at_end(&s)) advance(&s);
-            } else {
-                tokens_append(&tokens, &s, SLASH, perm);
-            }
+            Token t = case_comment_or_slash(&s, COMMENT, SLASH, perm);
+            tokens_append_token(&tokens, t, perm);
             break;
 
         case '\n': s.line++; break;

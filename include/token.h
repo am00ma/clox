@@ -1,8 +1,9 @@
 #pragma once
 
+#include <stz/str.h>
+
 // clang-format off
 
-#include <stz/str.h>
 typedef enum
 {
     EMPTY = 0,
@@ -16,7 +17,7 @@ typedef enum
     GREATER, GREATER_EQUAL, LESS, LESS_EQUAL,
 
     // Literals
-    IDENTIFIER, STRING, NUMBER,
+    COMMENT, STRING, NUMBER, IDENTIFIER,
 
     // Keywords
     AND, CLASS, ELSE, FALSE, FUN, FOR,

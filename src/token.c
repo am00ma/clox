@@ -110,6 +110,31 @@ Token case_comment_or_slash(Scanner* s, int comment, int slash, Arena* perm)
     return t;
 }
 
+Token case_string(Scanner* s, Arena* perm)
+{
+    Token t = {};
+
+    while ((peek(s) != '"') && (!is_at_end(s)))
+    {
+        if (peek(s) == '\n') s->line++;
+        advance(s);
+    };
+
+    if (is_at_end(s))
+    {
+        error("Unterminated string: %ld", s->line);
+        return t;
+    }
+
+    // Closing "
+    advance(s);
+
+    t.type    = STRING;
+    t.line    = s->line;
+    t.literal = (Str){.buf = &s->text.buf[s->start + 1], .len = s->current - s->start - 1};
+    return t;
+}
+
 // Core function
 Tokens tokens_scan(Str text, Arena* perm)
 {
@@ -125,6 +150,7 @@ Tokens tokens_scan(Str text, Arena* perm)
 
     isize  maxtokens = 1024;
     Tokens tokens    = tokens_new(maxtokens, perm);
+    Token  t;
 
     while (!is_at_end(&s))
     {
@@ -150,8 +176,13 @@ Tokens tokens_scan(Str text, Arena* perm)
         case '<': tokens_append(&tokens, &s, match(&s, '=') ? LESS_EQUAL : LESS, perm); break;
         case '>': tokens_append(&tokens, &s, match(&s, '=') ? GREATER_EQUAL : GREATER, perm); break;
 
+        case '"':
+            t = case_string(&s, perm);
+            if (t.type) tokens_append_token(&tokens, t, perm);
+            break;
+
         case '/':
-            Token t = case_comment_or_slash(&s, COMMENT, SLASH, perm);
+            t = case_comment_or_slash(&s, COMMENT, SLASH, perm);
             tokens_append_token(&tokens, t, perm);
             break;
 

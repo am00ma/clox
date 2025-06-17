@@ -1,3 +1,8 @@
 // this is a comment
 (( )){} // grouping stuff
 !*+-/=<> <= == // operators
+"hello" // string
+"hello
+hi how 
+are you" // multiline string
+"hello // Unterminated string
